@@ -1356,16 +1356,15 @@ func (p *Page) Referrer() string {
 func (p *Page) Route(path string, cb RouteHandlerCallback, rm RegExMatcher) error {
 	p.logger.Debugf("Page:Route", "sid:%v path:%s", p.sessionID(), path)
 
-	if !p.hasRoutes() {
-		err := p.mainFrameSession.updateRequestInterception(true)
-		if err != nil {
-			return err
-		}
-	}
-
+	// Build the matcher first, so an invalid pattern is rejected before
+	// request interception is enabled for the page.
 	matcher, err := newPatternMatcher(path, rm)
 	if err != nil {
 		return fmt.Errorf("creating url matcher for path %s: %w", path, err)
+	}
+
+	if err = p.ensureRequestInterception(); err != nil {
+		return err
 	}
 
 	routeHandler := NewRouteHandler(path, cb, matcher)
@@ -1376,6 +1375,15 @@ func (p *Page) Route(path string, cb RouteHandlerCallback, rm RegExMatcher) erro
 	p.routes = append([]*RouteHandler{routeHandler}, p.routes...)
 
 	return nil
+}
+
+// ensureRequestInterception enables request interception when the first
+// route is registered for the page.
+func (p *Page) ensureRequestInterception() error {
+	if p.hasRoutes() {
+		return nil
+	}
+	return p.mainFrameSession.updateRequestInterception(true)
 }
 
 // Unroute removes the route(s) for the specified URL pattern.
